@@ -1,4 +1,4 @@
-const appVersion = "0.4.0";
+const appVersion = "0.5.0";
 const storageKey = "capture-app-prototype-items";
 const placesKeyStorageKey = "capture-app-google-places-key";
 
@@ -170,7 +170,7 @@ enablePlacesLookupButton.addEventListener("click", async () => {
 
   try {
     await loadGoogleMapsScript(key);
-    initialisePlacesAutocomplete();
+    await initialisePlacesAutocomplete();
     placeSearchWrap.hidden = false;
     placeSearchInput.focus();
     placesStatus.textContent = "Places lookup enabled. Choose a result to fill address/contact fields.";
@@ -480,7 +480,7 @@ function buildMapsQuery() {
 }
 
 function loadGoogleMapsScript(key) {
-  if (window.google?.maps?.places) {
+  if (window.google?.maps?.importLibrary) {
     return Promise.resolve();
   }
 
@@ -490,7 +490,7 @@ function loadGoogleMapsScript(key) {
 
   googleMapsScriptPromise = new Promise((resolve, reject) => {
     const script = document.createElement("script");
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(key)}&libraries=places&v=weekly&loading=async`;
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(key)}&v=weekly&loading=async`;
     script.async = true;
     script.addEventListener("load", resolve);
     script.addEventListener("error", reject);
@@ -500,40 +500,47 @@ function loadGoogleMapsScript(key) {
   return googleMapsScriptPromise;
 }
 
-function initialisePlacesAutocomplete() {
-  if (placesAutocomplete || !window.google?.maps?.places) {
+async function initialisePlacesAutocomplete() {
+  if (placesAutocomplete || !window.google?.maps?.importLibrary) {
     return;
   }
 
-  placesAutocomplete = new google.maps.places.Autocomplete(placeSearchInput, {
-    componentRestrictions: { country: "gr" },
-    fields: [
-      "place_id",
-      "name",
-      "formatted_address",
-      "address_components",
-      "geometry",
-      "international_phone_number",
-      "formatted_phone_number",
-      "website",
-      "url",
-      "types",
-    ],
+  const { PlaceAutocompleteElement } = await google.maps.importLibrary("places");
+  placesAutocomplete = new PlaceAutocompleteElement({
+    includedRegionCodes: ["gr"],
   });
 
-  placesAutocomplete.addListener("place_changed", () => {
-    const place = placesAutocomplete.getPlace();
+  placesAutocomplete.id = "googlePlaceAutocomplete";
+  placesAutocomplete.placeholder = "Start typing a restaurant, shop, cafe...";
+  placeSearchInput.hidden = true;
+  placeSearchInput.insertAdjacentElement("afterend", placesAutocomplete);
+
+  placesAutocomplete.addEventListener("gmp-select", async ({ placePrediction }) => {
+    const place = placePrediction.toPlace();
+    await place.fetchFields({
+      fields: [
+        "id",
+        "displayName",
+        "formattedAddress",
+        "addressComponents",
+        "internationalPhoneNumber",
+        "websiteURI",
+        "googleMapsURI",
+        "location",
+        "types",
+      ],
+    });
     fillFromGooglePlace(place);
   });
 }
 
 function fillFromGooglePlace(place) {
-  if (!place?.place_id) {
+  if (!place?.id) {
     placesStatus.textContent = "Choose a place from the Google suggestions list.";
     return;
   }
 
-  const components = place.address_components || [];
+  const components = place.addressComponents || [];
   const streetNumber = addressPart(components, "street_number");
   const route = addressPart(components, "route");
   const line1 = [streetNumber, route].filter(Boolean).join(" ");
@@ -545,9 +552,9 @@ function fillFromGooglePlace(place) {
     addressPart(components, "administrative_area_level_2") ||
     addressPart(components, "administrative_area_level_1");
 
-  fields.title.value = place.name || fields.title.value;
-  fields.location.value = place.name || fields.location.value;
-  fields.addressLine1.value = line1 || place.formatted_address || fields.addressLine1.value;
+  fields.title.value = place.displayName || fields.title.value;
+  fields.location.value = place.displayName || fields.location.value;
+  fields.addressLine1.value = line1 || place.formattedAddress || fields.addressLine1.value;
   fields.addressLine2.value =
     addressPart(components, "neighborhood") ||
     addressPart(components, "sublocality") ||
@@ -556,19 +563,17 @@ function fillFromGooglePlace(place) {
   fields.region.value = region || fields.region.value;
   fields.postcode.value = addressPart(components, "postal_code") || fields.postcode.value;
   fields.country.value = addressPart(components, "country") || fields.country.value || "Greece";
-  fields.phone.value =
-    place.international_phone_number ||
-    place.formatted_phone_number ||
-    fields.phone.value;
-  fields.website.value = place.website || fields.website.value;
-  fields.mapsUrl.value = place.url || fields.mapsUrl.value;
+  fields.phone.value = place.internationalPhoneNumber || fields.phone.value;
+  fields.website.value = place.websiteURI || fields.website.value;
+  fields.mapsUrl.value = place.googleMapsURI || fields.mapsUrl.value;
 
   placesStatus.textContent = "Place details filled. Add your own notes, tags, tasks, and LGSG routing.";
   flashSaved("Place filled");
 }
 
 function addressPart(components, type) {
-  return components.find((component) => component.types.includes(type))?.long_name || "";
+  const component = components.find((item) => item.types.includes(type));
+  return component?.longText || component?.long_name || "";
 }
 
 async function refreshAppShell() {

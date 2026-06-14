@@ -283,6 +283,11 @@ textarea:focus {
   font-size: 0.84rem;
 }
 
+gmp-place-autocomplete {
+  width: 100%;
+  color-scheme: light;
+}
+
 .details-panel summary {
   padding: 14px;
   color: var(--brand);
