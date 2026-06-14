@@ -1,4 +1,4 @@
-const appVersion = "0.5.0";
+const appVersion = "0.6.0";
 const storageKey = "capture-app-prototype-items";
 const placesKeyStorageKey = "capture-app-google-places-key";
 
@@ -27,6 +27,7 @@ const clearPlacesKeyButton = document.querySelector("#clearPlacesKey");
 const enablePlacesLookupButton = document.querySelector("#enablePlacesLookup");
 const placeSearchWrap = document.querySelector("#placeSearchWrap");
 const placeSearchInput = document.querySelector("#placeSearch");
+const placeResults = document.querySelector("#placeResults");
 const placesStatus = document.querySelector("#placesStatus");
 const fields = {
   title: document.querySelector("#title"),
@@ -54,8 +55,12 @@ const fields = {
 let captures = loadCaptures();
 let editingId = null;
 let currentPhotoData = "";
-let placesAutocomplete = null;
+let placesLibrary = null;
+let placesSessionToken = null;
 let googleMapsScriptPromise = null;
+let placesLookupReady = false;
+let latestPlacesRequestId = 0;
+let placeSearchDebounce = null;
 
 appVersionLabel.textContent = `v${appVersion}`;
 placesApiKeyInput.value = localStorage.getItem(placesKeyStorageKey) || "";
@@ -152,7 +157,11 @@ clearPlacesKeyButton.addEventListener("click", () => {
   localStorage.removeItem(placesKeyStorageKey);
   placesApiKeyInput.value = "";
   placeSearchWrap.hidden = true;
-  placesAutocomplete = null;
+  placeResults.hidden = true;
+  placeResults.replaceChildren();
+  placesLibrary = null;
+  placesSessionToken = null;
+  placesLookupReady = false;
   placesStatus.textContent = "Places key cleared from this device.";
   flashSaved("Key cleared");
 });
@@ -173,10 +182,30 @@ enablePlacesLookupButton.addEventListener("click", async () => {
     await initialisePlacesAutocomplete();
     placeSearchWrap.hidden = false;
     placeSearchInput.focus();
-    placesStatus.textContent = "Places lookup enabled. Choose a result to fill address/contact fields.";
+    placesStatus.textContent = "Places lookup enabled. Type at least 3 characters, then tap a suggestion.";
   } catch {
     placesStatus.textContent = "Could not load Google Places. Check the API key, allowed domain, billing, and enabled APIs.";
   }
+});
+
+placeSearchInput.addEventListener("input", () => {
+  window.clearTimeout(placeSearchDebounce);
+  placeSearchDebounce = window.setTimeout(fetchPlaceSuggestions, 350);
+});
+
+placeResults.addEventListener("click", (event) => {
+  const button = event.target.closest("button[data-index]");
+  if (!button || !placesLibrary?.lastSuggestions) {
+    return;
+  }
+
+  const suggestion = placesLibrary.lastSuggestions[Number(button.dataset.index)];
+  const prediction = suggestion?.placePrediction;
+  if (!prediction) {
+    return;
+  }
+
+  fillFromGooglePlacePrediction(prediction);
 });
 
 choosePhotoButton.addEventListener("click", () => photoInput.click());
@@ -501,21 +530,95 @@ function loadGoogleMapsScript(key) {
 }
 
 async function initialisePlacesAutocomplete() {
-  if (placesAutocomplete || !window.google?.maps?.importLibrary) {
+  if (placesLookupReady || !window.google?.maps?.importLibrary) {
     return;
   }
 
-  const { PlaceAutocompleteElement } = await google.maps.importLibrary("places");
-  placesAutocomplete = new PlaceAutocompleteElement({
-    includedRegionCodes: ["gr"],
+  const { AutocompleteSessionToken, AutocompleteSuggestion } =
+    await google.maps.importLibrary("places");
+
+  placesLibrary = {
+    AutocompleteSessionToken,
+    AutocompleteSuggestion,
+    lastSuggestions: [],
+  };
+  placesSessionToken = new AutocompleteSessionToken();
+  placesLookupReady = true;
+  placeSearchInput.hidden = false;
+  placeSearchInput.autocomplete = "off";
+}
+
+async function fetchPlaceSuggestions() {
+  if (!placesLookupReady || !placesLibrary) {
+    return;
+  }
+
+  const input = placeSearchInput.value.trim();
+  placeResults.replaceChildren();
+  placeResults.hidden = true;
+
+  if (input.length < 3) {
+    placesStatus.textContent = "Type at least 3 characters to search places.";
+    return;
+  }
+
+  const requestId = ++latestPlacesRequestId;
+  placesStatus.textContent = `Searching for "${input}"...`;
+
+  try {
+    const { suggestions } =
+      await placesLibrary.AutocompleteSuggestion.fetchAutocompleteSuggestions({
+        input,
+        includedRegionCodes: ["gr"],
+        language: "en-GB",
+        region: "gr",
+        sessionToken: placesSessionToken,
+      });
+
+    if (requestId !== latestPlacesRequestId) {
+      return;
+    }
+
+    placesLibrary.lastSuggestions = suggestions || [];
+    renderPlaceSuggestions(placesLibrary.lastSuggestions, input);
+  } catch {
+    placesStatus.textContent = "Place search failed. Check API restrictions and that Places API (New) is enabled.";
+  }
+}
+
+function renderPlaceSuggestions(suggestions, input) {
+  placeResults.replaceChildren();
+
+  if (!suggestions.length) {
+    placesStatus.textContent = `No place suggestions found for "${input}".`;
+    placeResults.hidden = true;
+    return;
+  }
+
+  suggestions.forEach((suggestion, index) => {
+    const prediction = suggestion.placePrediction;
+    if (!prediction) {
+      return;
+    }
+
+    const button = document.createElement("button");
+    button.type = "button";
+    button.dataset.index = String(index);
+    button.textContent = prediction.text.toString();
+
+    const item = document.createElement("li");
+    item.append(button);
+    placeResults.append(item);
   });
 
-  placesAutocomplete.id = "googlePlaceAutocomplete";
-  placesAutocomplete.placeholder = "Start typing a restaurant, shop, cafe...";
-  placeSearchInput.hidden = true;
-  placeSearchInput.insertAdjacentElement("afterend", placesAutocomplete);
+  placeResults.hidden = placeResults.children.length === 0;
+  placesStatus.textContent = "Tap a suggestion to fill address/contact details.";
+}
 
-  placesAutocomplete.addEventListener("gmp-select", async ({ placePrediction }) => {
+async function fillFromGooglePlacePrediction(placePrediction) {
+  placesStatus.textContent = "Loading place details...";
+
+  try {
     const place = placePrediction.toPlace();
     await place.fetchFields({
       fields: [
@@ -530,8 +633,16 @@ async function initialisePlacesAutocomplete() {
         "types",
       ],
     });
+
     fillFromGooglePlace(place);
-  });
+    placesSessionToken = new placesLibrary.AutocompleteSessionToken();
+    placesLibrary.lastSuggestions = [];
+    placeResults.replaceChildren();
+    placeResults.hidden = true;
+    placeSearchInput.value = "";
+  } catch {
+    placesStatus.textContent = "Could not load place details. Try another suggestion or check API restrictions.";
+  }
 }
 
 function fillFromGooglePlace(place) {

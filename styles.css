@@ -288,6 +288,38 @@ gmp-place-autocomplete {
   color-scheme: light;
 }
 
+.place-results {
+  display: grid;
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  overflow: hidden;
+  background: #fff;
+}
+
+.place-results li + li {
+  border-top: 1px solid var(--line);
+}
+
+.place-results button {
+  width: 100%;
+  border-radius: 0;
+  padding: 12px;
+  color: var(--ink);
+  background: #fff;
+  text-align: left;
+  font-weight: 750;
+}
+
+.place-results button:hover,
+.place-results button:focus {
+  color: var(--brand);
+  background: var(--brand-soft);
+}
+
 .details-panel summary {
   padding: 14px;
   color: var(--brand);
