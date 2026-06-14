@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#06224a">
+    <title>Luxe Capture Diagnostics</title>
+    <link rel="stylesheet" href="styles.css">
+    <style>
+      .diagnostics-shell {
+        width: min(920px, calc(100% - 24px));
+        margin: 0 auto;
+        padding: 24px 0;
+      }
+
+      .diagnostics-panel {
+        display: grid;
+        gap: 16px;
+        background: #fff;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        box-shadow: var(--shadow);
+        padding: 20px;
+      }
+
+      .diagnostic-actions {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+      }
+
+      .diagnostic-results {
+        display: grid;
+        gap: 10px;
+      }
+
+      .diagnostic-step {
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 12px;
+        background: #f8fbff;
+      }
+
+      .diagnostic-step strong {
+        display: block;
+        margin-bottom: 6px;
+      }
+
+      .diagnostic-step pre {
+        margin: 8px 0 0;
+        overflow-x: auto;
+        white-space: pre-wrap;
+        font-size: 0.8rem;
+      }
+
+      .pass {
+        border-color: #93c5bd;
+        background: #e6f6f3;
+      }
+
+      .fail {
+        border-color: #f0b4b4;
+        background: #fff1f1;
+      }
+
+      .warn {
+        border-color: #facc15;
+        background: #fffbea;
+      }
+    </style>
+  </head>
+  <body>
+    <header class="brand-header">
+      <div class="brand-row">
+        <div>
+          <p class="brand-kicker">Luxe Sailing</p>
+          <h1>Places Diagnostics</h1>
+        </div>
+        <div class="version-box">
+          <span>Diagnostics</span>
+          <a class="diagnostic-link" href="./">Back to app</a>
+        </div>
+      </div>
+      <p>Test the Google Maps/Places setup without saving or exposing your API key.</p>
+    </header>
+
+    <main class="diagnostics-shell">
+      <section class="diagnostics-panel">
+        <label>
+          <span>Google API key</span>
+          <input id="apiKey" type="password" placeholder="Paste the Luxe Capture Places browser key">
+        </label>
+
+        <label>
+          <span>Test search</span>
+          <input id="testQuery" type="text" value="hawker hall" autocomplete="off">
+        </label>
+
+        <div class="diagnostic-actions">
+          <button type="button" id="runDiagnostics">Run diagnostics</button>
+          <button type="button" class="secondary" id="clearDiagnostics">Clear</button>
+        </div>
+
+        <p class="helper-text">
+          The key is only used in this browser session for testing. Do not paste it into chat or screenshots.
+        </p>
+
+        <div class="diagnostic-results" id="results"></div>
+      </section>
+    </main>
+
+    <script src="diagnostics.js"></script>
+  </body>
+</html>
