@@ -12,9 +12,15 @@
   </head>
   <body>
     <header class="brand-header">
-      <div>
-        <p class="brand-kicker">Luxe Sailing</p>
-        <h1>Luxe Capture</h1>
+      <div class="brand-row">
+        <div>
+          <p class="brand-kicker">Luxe Sailing</p>
+          <h1>Luxe Capture</h1>
+        </div>
+        <div class="version-box">
+          <span id="appVersion">Version</span>
+          <button type="button" id="checkUpdate">Check for update</button>
+        </div>
       </div>
       <p>Ideas, recipes, shops, places, and field notes.</p>
     </header>
@@ -78,11 +84,25 @@
           </label>
 
           <div class="lookup-box">
-            <div>
+            <div class="lookup-main">
               <span>Place lookup</span>
-              <p>Search Maps, choose the right business, then copy useful details back here.</p>
+              <p>Use Google Places to fill restaurant, shop, cafe, and place details faster.</p>
+              <label class="compact-label">
+                <span>Google Places API key</span>
+                <input id="placesApiKey" type="password" placeholder="Paste restricted API key">
+              </label>
+              <div class="lookup-actions">
+                <button type="button" class="secondary" id="savePlacesKey">Save key</button>
+                <button type="button" class="secondary" id="clearPlacesKey">Clear key</button>
+                <button type="button" class="secondary" id="enablePlacesLookup">Enable lookup</button>
+              </div>
+              <label class="compact-label" id="placeSearchWrap" hidden>
+                <span>Find place</span>
+                <input id="placeSearch" type="search" placeholder="Start typing a restaurant, shop, cafe...">
+              </label>
+              <p class="helper-text" id="placesStatus">No Places key saved on this device yet.</p>
             </div>
-            <button type="button" class="secondary" id="searchMaps">Search Google Maps</button>
+            <button type="button" class="secondary" id="searchMaps">Open Google Maps</button>
           </div>
 
           <details class="details-panel">

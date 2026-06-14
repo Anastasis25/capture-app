@@ -39,6 +39,13 @@ textarea {
   padding: 30px max(16px, calc((100vw - 1180px) / 2)) 34px;
 }
 
+.brand-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+}
+
 .brand-header h1 {
   margin: 0;
   font-size: clamp(2rem, 4vw, 3.4rem);
@@ -59,6 +66,29 @@ textarea {
   font-weight: 900;
   letter-spacing: 0.08em;
   text-transform: uppercase;
+}
+
+.version-box {
+  display: grid;
+  gap: 8px;
+  justify-items: end;
+}
+
+.version-box span {
+  display: inline-flex;
+  min-height: 30px;
+  align-items: center;
+  padding: 5px 10px;
+  border-radius: 999px;
+  color: #06224a;
+  background: #ffffff;
+  font-size: 0.82rem;
+  font-weight: 900;
+}
+
+.version-box button {
+  color: #06224a;
+  background: #bfdbfe;
 }
 
 .app-shell {
@@ -209,9 +239,15 @@ textarea:focus {
 .lookup-box {
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  align-items: flex-start;
   gap: 12px;
   padding: 14px;
+}
+
+.lookup-main {
+  display: grid;
+  gap: 10px;
+  flex: 1;
 }
 
 .lookup-box span {
@@ -225,6 +261,26 @@ textarea:focus {
   color: #2e3744;
   font-size: 0.9rem;
   line-height: 1.35;
+}
+
+.compact-label {
+  gap: 5px;
+}
+
+.lookup-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.lookup-actions button {
+  padding: 9px 11px;
+}
+
+.helper-text {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.84rem;
 }
 
 .details-panel summary {
@@ -488,6 +544,14 @@ button.danger {
   .filters,
   .detail-grid {
     grid-template-columns: 1fr;
+  }
+
+  .brand-row {
+    flex-direction: column;
+  }
+
+  .version-box {
+    justify-items: start;
   }
 
   .panel-heading,

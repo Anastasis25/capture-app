@@ -1,4 +1,6 @@
+const appVersion = "0.4.0";
 const storageKey = "capture-app-prototype-items";
+const placesKeyStorageKey = "capture-app-google-places-key";
 
 const form = document.querySelector("#captureForm");
 const resetFormButton = document.querySelector("#resetForm");
@@ -17,6 +19,15 @@ const removePhotoButton = document.querySelector("#removePhoto");
 const choosePhotoButton = document.querySelector("#choosePhoto");
 const takePhotoButton = document.querySelector("#takePhoto");
 const searchMapsButton = document.querySelector("#searchMaps");
+const appVersionLabel = document.querySelector("#appVersion");
+const checkUpdateButton = document.querySelector("#checkUpdate");
+const placesApiKeyInput = document.querySelector("#placesApiKey");
+const savePlacesKeyButton = document.querySelector("#savePlacesKey");
+const clearPlacesKeyButton = document.querySelector("#clearPlacesKey");
+const enablePlacesLookupButton = document.querySelector("#enablePlacesLookup");
+const placeSearchWrap = document.querySelector("#placeSearchWrap");
+const placeSearchInput = document.querySelector("#placeSearch");
+const placesStatus = document.querySelector("#placesStatus");
 const fields = {
   title: document.querySelector("#title"),
   notes: document.querySelector("#notes"),
@@ -43,6 +54,14 @@ const fields = {
 let captures = loadCaptures();
 let editingId = null;
 let currentPhotoData = "";
+let placesAutocomplete = null;
+let googleMapsScriptPromise = null;
+
+appVersionLabel.textContent = `v${appVersion}`;
+placesApiKeyInput.value = localStorage.getItem(placesKeyStorageKey) || "";
+if (placesApiKeyInput.value) {
+  placesStatus.textContent = "Places key saved on this device. Tap Enable lookup to use autocomplete.";
+}
 
 form.addEventListener("submit", (event) => {
   event.preventDefault();
@@ -111,6 +130,54 @@ resetFormButton.addEventListener("click", () => {
 
 searchInput.addEventListener("input", render);
 sectionFilter.addEventListener("change", render);
+
+checkUpdateButton.addEventListener("click", async () => {
+  await refreshAppShell();
+});
+
+savePlacesKeyButton.addEventListener("click", () => {
+  const key = placesApiKeyInput.value.trim();
+  if (!key) {
+    flashSaved("Paste key first");
+    placesStatus.textContent = "Paste a restricted Google Maps API key, then save it.";
+    return;
+  }
+
+  localStorage.setItem(placesKeyStorageKey, key);
+  placesStatus.textContent = "Places key saved on this device. Tap Enable lookup.";
+  flashSaved("Key saved");
+});
+
+clearPlacesKeyButton.addEventListener("click", () => {
+  localStorage.removeItem(placesKeyStorageKey);
+  placesApiKeyInput.value = "";
+  placeSearchWrap.hidden = true;
+  placesAutocomplete = null;
+  placesStatus.textContent = "Places key cleared from this device.";
+  flashSaved("Key cleared");
+});
+
+enablePlacesLookupButton.addEventListener("click", async () => {
+  const key = placesApiKeyInput.value.trim() || localStorage.getItem(placesKeyStorageKey) || "";
+  if (!key) {
+    placesStatus.textContent = "Paste and save a restricted API key first.";
+    placesApiKeyInput.focus();
+    return;
+  }
+
+  localStorage.setItem(placesKeyStorageKey, key);
+  placesStatus.textContent = "Loading Google Places...";
+
+  try {
+    await loadGoogleMapsScript(key);
+    initialisePlacesAutocomplete();
+    placeSearchWrap.hidden = false;
+    placeSearchInput.focus();
+    placesStatus.textContent = "Places lookup enabled. Choose a result to fill address/contact fields.";
+  } catch {
+    placesStatus.textContent = "Could not load Google Places. Check the API key, allowed domain, billing, and enabled APIs.";
+  }
+});
 
 choosePhotoButton.addEventListener("click", () => photoInput.click());
 takePhotoButton.addEventListener("click", () => cameraPhotoInput.click());
@@ -410,6 +477,120 @@ function buildMapsQuery() {
     .map((value) => value.trim())
     .filter(Boolean)
     .join(" ");
+}
+
+function loadGoogleMapsScript(key) {
+  if (window.google?.maps?.places) {
+    return Promise.resolve();
+  }
+
+  if (googleMapsScriptPromise) {
+    return googleMapsScriptPromise;
+  }
+
+  googleMapsScriptPromise = new Promise((resolve, reject) => {
+    const script = document.createElement("script");
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(key)}&libraries=places&v=weekly&loading=async`;
+    script.async = true;
+    script.addEventListener("load", resolve);
+    script.addEventListener("error", reject);
+    document.head.append(script);
+  });
+
+  return googleMapsScriptPromise;
+}
+
+function initialisePlacesAutocomplete() {
+  if (placesAutocomplete || !window.google?.maps?.places) {
+    return;
+  }
+
+  placesAutocomplete = new google.maps.places.Autocomplete(placeSearchInput, {
+    componentRestrictions: { country: "gr" },
+    fields: [
+      "place_id",
+      "name",
+      "formatted_address",
+      "address_components",
+      "geometry",
+      "international_phone_number",
+      "formatted_phone_number",
+      "website",
+      "url",
+      "types",
+    ],
+  });
+
+  placesAutocomplete.addListener("place_changed", () => {
+    const place = placesAutocomplete.getPlace();
+    fillFromGooglePlace(place);
+  });
+}
+
+function fillFromGooglePlace(place) {
+  if (!place?.place_id) {
+    placesStatus.textContent = "Choose a place from the Google suggestions list.";
+    return;
+  }
+
+  const components = place.address_components || [];
+  const streetNumber = addressPart(components, "street_number");
+  const route = addressPart(components, "route");
+  const line1 = [streetNumber, route].filter(Boolean).join(" ");
+  const locality =
+    addressPart(components, "locality") ||
+    addressPart(components, "postal_town") ||
+    addressPart(components, "administrative_area_level_3");
+  const region =
+    addressPart(components, "administrative_area_level_2") ||
+    addressPart(components, "administrative_area_level_1");
+
+  fields.title.value = place.name || fields.title.value;
+  fields.location.value = place.name || fields.location.value;
+  fields.addressLine1.value = line1 || place.formatted_address || fields.addressLine1.value;
+  fields.addressLine2.value =
+    addressPart(components, "neighborhood") ||
+    addressPart(components, "sublocality") ||
+    fields.addressLine2.value;
+  fields.townCity.value = locality || fields.townCity.value;
+  fields.region.value = region || fields.region.value;
+  fields.postcode.value = addressPart(components, "postal_code") || fields.postcode.value;
+  fields.country.value = addressPart(components, "country") || fields.country.value || "Greece";
+  fields.phone.value =
+    place.international_phone_number ||
+    place.formatted_phone_number ||
+    fields.phone.value;
+  fields.website.value = place.website || fields.website.value;
+  fields.mapsUrl.value = place.url || fields.mapsUrl.value;
+
+  placesStatus.textContent = "Place details filled. Add your own notes, tags, tasks, and LGSG routing.";
+  flashSaved("Place filled");
+}
+
+function addressPart(components, type) {
+  return components.find((component) => component.types.includes(type))?.long_name || "";
+}
+
+async function refreshAppShell() {
+  flashSaved("Checking");
+
+  if ("serviceWorker" in navigator) {
+    const registrations = await navigator.serviceWorker.getRegistrations();
+    await Promise.all(registrations.map((registration) => registration.update()));
+  }
+
+  if ("caches" in window) {
+    const keys = await caches.keys();
+    await Promise.all(
+      keys
+        .filter((key) => key.startsWith("luxe-capture"))
+        .map((key) => caches.delete(key))
+    );
+  }
+
+  window.setTimeout(() => {
+    window.location.reload();
+  }, 300);
 }
 
 function flashSaved(text) {
