@@ -283,6 +283,20 @@ textarea:focus {
   font-size: 0.84rem;
 }
 
+.debug-output {
+  max-width: 100%;
+  margin: 0;
+  padding: 10px;
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: #334155;
+  background: #fff;
+  font-size: 0.76rem;
+  line-height: 1.45;
+  white-space: pre-wrap;
+}
+
 gmp-place-autocomplete {
   width: 100%;
   color-scheme: light;

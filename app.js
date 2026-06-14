@@ -1,4 +1,4 @@
-const appVersion = "0.7.0";
+const appVersion = "0.8.0";
 const storageKey = "capture-app-prototype-items";
 const placesKeyStorageKey = "capture-app-google-places-key";
 
@@ -29,6 +29,7 @@ const placeSearchWrap = document.querySelector("#placeSearchWrap");
 const placeSearchInput = document.querySelector("#placeSearch");
 const placeResults = document.querySelector("#placeResults");
 const placesStatus = document.querySelector("#placesStatus");
+const placesDebug = document.querySelector("#placesDebug");
 const fields = {
   title: document.querySelector("#title"),
   notes: document.querySelector("#notes"),
@@ -184,7 +185,7 @@ enablePlacesLookupButton.addEventListener("click", async () => {
     placeSearchInput.focus();
     placesStatus.textContent = "Places lookup enabled. Type at least 3 characters, then tap a suggestion.";
   } catch (error) {
-    placesStatus.textContent = `Could not load Google Places: ${readErrorMessage(error)}`;
+    showPlacesError("Could not load Google Places", error);
   }
 });
 
@@ -582,7 +583,7 @@ async function fetchPlaceSuggestions() {
     placesLibrary.lastSuggestions = suggestions || [];
     renderPlaceSuggestions(placesLibrary.lastSuggestions, input);
   } catch (error) {
-    placesStatus.textContent = `Place search failed: ${readErrorMessage(error)}`;
+    showPlacesError("Place search failed", error);
   }
 }
 
@@ -641,7 +642,7 @@ async function fillFromGooglePlacePrediction(placePrediction) {
     placeResults.hidden = true;
     placeSearchInput.value = "";
   } catch (error) {
-    placesStatus.textContent = `Could not load place details: ${readErrorMessage(error)}`;
+    showPlacesError("Could not load place details", error);
   }
 }
 
@@ -697,6 +698,20 @@ function readErrorMessage(error) {
   }
 
   return error.message || error.status || JSON.stringify(error);
+}
+
+function showPlacesError(prefix, error) {
+  const message = readErrorMessage(error);
+  placesStatus.textContent = `${prefix}: ${message}`;
+  placesDebug.hidden = false;
+  placesDebug.textContent = [
+    `Page: ${window.location.href}`,
+    `Origin: ${window.location.origin}`,
+    `Referrer: ${document.referrer || "(none)"}`,
+    `Error name: ${error?.name || "(none)"}`,
+    `Error code: ${error?.code || error?.status || "(none)"}`,
+    `Error message: ${message}`,
+  ].join("\n");
 }
 
 async function refreshAppShell() {
