@@ -1,4 +1,4 @@
-const appVersion = "0.8.0";
+const appVersion = "1.0.0";
 const storageKey = "capture-app-prototype-items";
 const placesKeyStorageKey = "capture-app-google-places-key";
 
@@ -27,6 +27,7 @@ const clearPlacesKeyButton = document.querySelector("#clearPlacesKey");
 const enablePlacesLookupButton = document.querySelector("#enablePlacesLookup");
 const placeSearchWrap = document.querySelector("#placeSearchWrap");
 const placeSearchInput = document.querySelector("#placeSearch");
+const runPlaceSearchButton = document.querySelector("#runPlaceSearch");
 const placeResults = document.querySelector("#placeResults");
 const placesStatus = document.querySelector("#placesStatus");
 const placesDebug = document.querySelector("#placesDebug");
@@ -77,6 +78,8 @@ form.addEventListener("submit", (event) => {
   const previousCapture = editingId ? findCapture(editingId) : null;
 
   if (!title) {
+    fields.title.focus();
+    flashSaved("Add a title");
     return;
   }
 
@@ -158,6 +161,7 @@ clearPlacesKeyButton.addEventListener("click", () => {
   localStorage.removeItem(placesKeyStorageKey);
   placesApiKeyInput.value = "";
   placeSearchWrap.hidden = true;
+  runPlaceSearchButton.hidden = true;
   placeResults.hidden = true;
   placeResults.replaceChildren();
   placesLibrary = null;
@@ -182,6 +186,7 @@ enablePlacesLookupButton.addEventListener("click", async () => {
     await loadGoogleMapsScript(key);
     await initialisePlacesAutocomplete();
     placeSearchWrap.hidden = false;
+    runPlaceSearchButton.hidden = false;
     placeSearchInput.focus();
     placesStatus.textContent = "Places lookup enabled. Type at least 3 characters, then tap a suggestion.";
   } catch (error) {
@@ -193,6 +198,15 @@ placeSearchInput.addEventListener("input", () => {
   window.clearTimeout(placeSearchDebounce);
   placeSearchDebounce = window.setTimeout(fetchPlaceSuggestions, 350);
 });
+
+placeSearchInput.addEventListener("keydown", (event) => {
+  if (event.key === "Enter") {
+    event.preventDefault();
+    fetchPlaceSuggestions();
+  }
+});
+
+runPlaceSearchButton.addEventListener("click", fetchPlaceSuggestions);
 
 placeResults.addEventListener("click", (event) => {
   const button = event.target.closest("button[data-index]");
@@ -565,14 +579,14 @@ async function fetchPlaceSuggestions() {
 
   const requestId = ++latestPlacesRequestId;
   placesStatus.textContent = `Searching for "${input}"...`;
+  placesDebug.hidden = true;
+  placesDebug.textContent = "";
 
   try {
     const { suggestions } =
       await placesLibrary.AutocompleteSuggestion.fetchAutocompleteSuggestions({
         input,
-        includedRegionCodes: ["gr"],
         language: "en-GB",
-        region: "gr",
         sessionToken: placesSessionToken,
       });
 
