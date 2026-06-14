@@ -1,4 +1,4 @@
-const appVersion = "1.2.0";
+const appVersion = "1.3.0";
 const storageKey = "capture-app-prototype-items";
 const placesKeyStorageKey = "capture-app-google-places-key";
 
@@ -28,7 +28,6 @@ const enablePlacesLookupButton = document.querySelector("#enablePlacesLookup");
 const placeSearchWrap = document.querySelector("#placeSearchWrap");
 const placeSearchInput = document.querySelector("#placeSearch");
 const runPlaceSearchButton = document.querySelector("#runPlaceSearch");
-const googlePlaceWidget = document.querySelector("#googlePlaceWidget");
 const placeResults = document.querySelector("#placeResults");
 const placesStatus = document.querySelector("#placesStatus");
 const placesDebug = document.querySelector("#placesDebug");
@@ -58,7 +57,6 @@ const fields = {
 let captures = loadCaptures();
 let editingId = null;
 let currentPhotoData = "";
-let placesAutocomplete = null;
 let placesLibrary = null;
 let placesSessionToken = null;
 let googleMapsScriptPromise = null;
@@ -164,11 +162,8 @@ clearPlacesKeyButton.addEventListener("click", () => {
   placesApiKeyInput.value = "";
   placeSearchWrap.hidden = true;
   runPlaceSearchButton.hidden = true;
-  googlePlaceWidget.hidden = true;
-  googlePlaceWidget.replaceChildren();
   placeResults.hidden = true;
   placeResults.replaceChildren();
-  placesAutocomplete = null;
   placesLibrary = null;
   placesSessionToken = null;
   placesLookupReady = false;
@@ -192,7 +187,6 @@ enablePlacesLookupButton.addEventListener("click", async () => {
     await initialisePlacesAutocomplete();
     placeSearchWrap.hidden = false;
     runPlaceSearchButton.hidden = false;
-    googlePlaceWidget.hidden = true;
     placeSearchInput.focus();
     placesStatus.textContent = "Places lookup ready. Type a place, tap Search places, then tap a suggestion.";
   } catch (error) {
@@ -555,7 +549,7 @@ async function initialisePlacesAutocomplete() {
     return;
   }
 
-  const { PlaceAutocompleteElement, AutocompleteSessionToken, AutocompleteSuggestion } =
+  const { AutocompleteSessionToken, AutocompleteSuggestion } =
     await google.maps.importLibrary("places");
 
   placesLibrary = {
@@ -564,52 +558,7 @@ async function initialisePlacesAutocomplete() {
     lastSuggestions: [],
   };
   placesSessionToken = new AutocompleteSessionToken();
-  placesAutocomplete = new PlaceAutocompleteElement();
-  placesAutocomplete.placeholder = "Search any restaurant, shop, cafe, or place...";
-  placesAutocomplete.id = "googlePlaceAutocomplete";
-  googlePlaceWidget.replaceChildren(placesAutocomplete);
-  googlePlaceWidget.hidden = false;
-  placesAutocomplete.addEventListener("gmp-select", handleGooglePlaceSelect);
   placesLookupReady = true;
-}
-
-async function handleGooglePlaceSelect(event) {
-  const placePrediction =
-    event.placePrediction ||
-    event.detail?.placePrediction ||
-    event.detail?.prediction;
-
-  if (!placePrediction?.toPlace) {
-    showPlacesError("Could not read selected place", {
-      message: "Google did not return a place prediction in the expected format.",
-      name: "MissingPlacePrediction",
-    });
-    return;
-  }
-
-  placesStatus.textContent = "Loading selected place details...";
-  placesDebug.hidden = true;
-  placesDebug.textContent = "";
-
-  try {
-    const place = placePrediction.toPlace();
-    await place.fetchFields({
-      fields: [
-        "id",
-        "displayName",
-        "formattedAddress",
-        "addressComponents",
-        "internationalPhoneNumber",
-        "websiteURI",
-        "googleMapsURI",
-        "location",
-        "types",
-      ],
-    });
-    fillFromGooglePlace(place);
-  } catch (error) {
-    showPlacesError("Could not load selected place", error);
-  }
 }
 
 async function fetchPlaceSuggestions() {
