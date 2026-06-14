@@ -1,4 +1,4 @@
-const appVersion = "0.6.0";
+const appVersion = "0.7.0";
 const storageKey = "capture-app-prototype-items";
 const placesKeyStorageKey = "capture-app-google-places-key";
 
@@ -183,8 +183,8 @@ enablePlacesLookupButton.addEventListener("click", async () => {
     placeSearchWrap.hidden = false;
     placeSearchInput.focus();
     placesStatus.textContent = "Places lookup enabled. Type at least 3 characters, then tap a suggestion.";
-  } catch {
-    placesStatus.textContent = "Could not load Google Places. Check the API key, allowed domain, billing, and enabled APIs.";
+  } catch (error) {
+    placesStatus.textContent = `Could not load Google Places: ${readErrorMessage(error)}`;
   }
 });
 
@@ -581,8 +581,8 @@ async function fetchPlaceSuggestions() {
 
     placesLibrary.lastSuggestions = suggestions || [];
     renderPlaceSuggestions(placesLibrary.lastSuggestions, input);
-  } catch {
-    placesStatus.textContent = "Place search failed. Check API restrictions and that Places API (New) is enabled.";
+  } catch (error) {
+    placesStatus.textContent = `Place search failed: ${readErrorMessage(error)}`;
   }
 }
 
@@ -640,8 +640,8 @@ async function fillFromGooglePlacePrediction(placePrediction) {
     placeResults.replaceChildren();
     placeResults.hidden = true;
     placeSearchInput.value = "";
-  } catch {
-    placesStatus.textContent = "Could not load place details. Try another suggestion or check API restrictions.";
+  } catch (error) {
+    placesStatus.textContent = `Could not load place details: ${readErrorMessage(error)}`;
   }
 }
 
@@ -685,6 +685,18 @@ function fillFromGooglePlace(place) {
 function addressPart(components, type) {
   const component = components.find((item) => item.types.includes(type));
   return component?.longText || component?.long_name || "";
+}
+
+function readErrorMessage(error) {
+  if (!error) {
+    return "unknown error";
+  }
+
+  if (typeof error === "string") {
+    return error;
+  }
+
+  return error.message || error.status || JSON.stringify(error);
 }
 
 async function refreshAppShell() {
