@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#06224a">
+    <meta name="description" content="Mobile capture app for ideas, places, recipes, shopping finds, and tasks.">
+    <title>Luxe Capture</title>
+    <link rel="manifest" href="manifest.webmanifest">
+    <link rel="icon" href="icon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <header class="brand-header">
+      <div>
+        <p class="brand-kicker">Luxe Sailing</p>
+        <h1>Luxe Capture</h1>
+      </div>
+      <p>Ideas, recipes, shops, places, and field notes.</p>
+    </header>
+
+    <main class="app-shell">
+      <section class="capture-panel" aria-labelledby="capture-title">
+        <div class="panel-heading">
+          <div>
+            <p class="eyebrow">Capture</p>
+            <h2 id="capture-title">Quick capture</h2>
+          </div>
+          <span class="save-state" id="saveState">Local prototype</span>
+        </div>
+
+        <form id="captureForm" class="capture-form">
+          <label>
+            <span>Title</span>
+            <input id="title" name="title" type="text" placeholder="What did you find?" autocomplete="off" required>
+          </label>
+
+          <label>
+            <span>Notes</span>
+            <textarea id="notes" name="notes" rows="4" placeholder="Add the useful details while they are fresh."></textarea>
+          </label>
+
+          <div class="grid two">
+            <label>
+              <span>Category</span>
+              <select id="category" name="category">
+                <option value="idea">Idea</option>
+                <option value="note">Note</option>
+                <option value="recipe">Recipe</option>
+                <option value="food">Food / Gastronomy</option>
+                <option value="restaurant">Restaurant / Cafe</option>
+                <option value="shopping">Shopping</option>
+                <option value="shop">Shop / Supplier</option>
+                <option value="product">Product</option>
+                <option value="place">Place</option>
+                <option value="observation">Observation</option>
+                <option value="task">Task</option>
+                <option value="link">Link</option>
+                <option value="other">Other</option>
+              </select>
+            </label>
+
+            <label>
+              <span>Status</span>
+              <select id="status" name="status">
+                <option value="captured">Captured</option>
+                <option value="reviewing">Reviewing</option>
+                <option value="approved">Approved</option>
+                <option value="published">Published</option>
+                <option value="archived">Archived</option>
+              </select>
+            </label>
+          </div>
+
+          <label>
+            <span>Location</span>
+            <input id="location" name="location" type="text" placeholder="Place name, town, island, street">
+          </label>
+
+          <label>
+            <span>Tags</span>
+            <input id="tags" name="tags" type="text" placeholder="comma, separated, tags">
+          </label>
+
+          <div class="photo-box">
+            <label>
+              <span>Photo</span>
+              <input id="photo" name="photo" type="file" accept="image/*" capture="environment">
+            </label>
+            <div class="photo-preview" id="photoPreviewBox" hidden>
+              <img id="photoPreview" alt="Selected capture preview">
+              <button type="button" class="secondary" id="removePhoto">Remove photo</button>
+            </div>
+          </div>
+
+          <fieldset class="routing-box">
+            <legend>LGSG routing</legend>
+            <div class="grid two">
+              <label class="check-row">
+                <input id="isLgsgCandidate" name="isLgsgCandidate" type="checkbox">
+                <span>Potential LGSG item</span>
+              </label>
+
+              <label class="check-row">
+                <input id="clientVisible" name="clientVisible" type="checkbox">
+                <span>Client visible later</span>
+              </label>
+            </div>
+
+            <label>
+              <span>Target section</span>
+              <select id="targetSection" name="targetSection">
+                <option value="none">None</option>
+                <option value="gastronomy">Gastronomy</option>
+                <option value="shopping">Shopping</option>
+              </select>
+            </label>
+          </fieldset>
+
+          <label>
+            <span>Follow-up tasks</span>
+            <textarea id="tasks" name="tasks" rows="3" placeholder="One per line: check hours, take photo, write recipe..."></textarea>
+          </label>
+
+          <div class="actions">
+            <button type="submit">Save capture</button>
+            <button type="button" class="secondary" id="resetForm">Clear</button>
+          </div>
+        </form>
+      </section>
+
+      <section class="library-panel" aria-labelledby="library-title">
+        <div class="panel-heading">
+          <div>
+            <p class="eyebrow">Repository</p>
+            <h2 id="library-title">Captured items</h2>
+          </div>
+          <span class="count-pill" id="itemCount">0 items</span>
+        </div>
+
+        <div class="filters">
+          <label>
+            <span>Search</span>
+            <input id="search" type="search" placeholder="Search captures">
+          </label>
+          <label>
+            <span>LGSG filter</span>
+            <select id="sectionFilter">
+              <option value="all">All</option>
+              <option value="none">No LGSG target</option>
+              <option value="gastronomy">Gastronomy</option>
+              <option value="shopping">Shopping</option>
+            </select>
+          </label>
+        </div>
+
+        <div id="emptyState" class="empty-state">
+          <h3>No captures yet</h3>
+          <p>Your saved items will appear here.</p>
+        </div>
+
+        <div id="captureList" class="capture-list" aria-live="polite"></div>
+      </section>
+    </main>
+
+    <template id="captureTemplate">
+      <article class="capture-card">
+        <div class="card-main">
+          <div>
+            <p class="meta-line"></p>
+            <h3></h3>
+          </div>
+          <span class="status-pill"></span>
+        </div>
+        <img class="capture-photo" alt="">
+        <p class="notes"></p>
+        <div class="tag-row"></div>
+        <dl class="detail-grid"></dl>
+        <ul class="task-list"></ul>
+        <div class="card-actions">
+          <button type="button" class="secondary edit-button">Edit</button>
+          <button type="button" class="danger delete-button">Delete</button>
+        </div>
+      </article>
+    </template>
+
+    <script src="app.js"></script>
+  </body>
+</html>
