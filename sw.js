@@ -1,4 +1,4 @@
-const cacheName = "luxe-capture-v10";
+const cacheName = "luxe-capture-v12";
 const assets = [
   "./",
   "./index.html",
