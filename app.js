@@ -1,4 +1,4 @@
-const appVersion = "2.0.0";
+const appVersion = "2.1.0";
 const storageKey = "capture-app-prototype-items";
 const shoppingStorageKey = "capture-app-shopping-pilot-records";
 const placesKeyStorageKey = "capture-app-google-places-key";
@@ -44,6 +44,8 @@ const shoppingBulkStatus = document.querySelector("#shoppingBulkStatus");
 const shoppingBulkVisibility = document.querySelector("#shoppingBulkVisibility");
 const shoppingBulkCategory = document.querySelector("#shoppingBulkCategory");
 const shoppingApplyBulkButton = document.querySelector("#shoppingApplyBulk");
+const shoppingExportCsvButton = document.querySelector("#shoppingExportCsv");
+const shoppingExportJsonButton = document.querySelector("#shoppingExportJson");
 const shoppingDeleteSelectedButton = document.querySelector("#shoppingDeleteSelected");
 const shoppingSelectedCount = document.querySelector("#shoppingSelectedCount");
 const shoppingSelectAll = document.querySelector("#shoppingSelectAll");
@@ -303,6 +305,8 @@ shoppingTableBody.addEventListener("change", (event) => {
 
 shoppingTableBody.addEventListener("click", handleShoppingTableAction);
 shoppingApplyBulkButton.addEventListener("click", applyShoppingBulkEdit);
+shoppingExportCsvButton.addEventListener("click", exportShoppingCsv);
+shoppingExportJsonButton.addEventListener("click", exportShoppingJson);
 shoppingDeleteSelectedButton.addEventListener("click", deleteSelectedShoppingRecords);
 
 choosePhotoButton.addEventListener("click", () => photoInput.click());
@@ -810,6 +814,97 @@ function deleteSelectedShoppingRecords() {
   persistShoppingRecords();
   renderShoppingPilot();
   flashSaved("Selected deleted");
+}
+
+function exportShoppingCsv() {
+  if (!shoppingRecords.length) {
+    flashSaved("No shopping records");
+    return;
+  }
+
+  const fieldsToExport = [
+    "name",
+    "category",
+    "subcategory",
+    "status",
+    "visibility",
+    "destination",
+    "region",
+    "country",
+    "address",
+    "phone",
+    "website",
+    "googleMapsUrl",
+    "googlePlaceId",
+    "latitude",
+    "longitude",
+    "rating",
+    "userRatingCount",
+    "priceLevel",
+    "businessStatus",
+    "internalNotes",
+    "publicNotes",
+    "source",
+    "importedAt",
+    "createdAt",
+    "updatedAt",
+    "reviewedAt",
+    "approvedAt",
+    "publishedAt",
+  ];
+
+  const rows = [
+    fieldsToExport.join(","),
+    ...shoppingRecords.map((record) =>
+      fieldsToExport.map((field) => csvCell(record[field])).join(",")
+    ),
+  ];
+
+  downloadTextFile(rows.join("\n"), `shopping-pilot-${dateStamp()}.csv`, "text/csv");
+  flashSaved("CSV exported");
+}
+
+function exportShoppingJson() {
+  if (!shoppingRecords.length) {
+    flashSaved("No shopping records");
+    return;
+  }
+
+  const payload = {
+    exportedAt: new Date().toISOString(),
+    appVersion,
+    source: "Luxe Capture Shopping Pilot",
+    records: shoppingRecords,
+  };
+
+  downloadTextFile(
+    JSON.stringify(payload, null, 2),
+    `shopping-pilot-${dateStamp()}.json`,
+    "application/json"
+  );
+  flashSaved("JSON exported");
+}
+
+function csvCell(value) {
+  const text = Array.isArray(value) ? value.join("; ") : String(value ?? "");
+  return `"${text.replace(/"/g, '""')}"`;
+}
+
+function downloadTextFile(content, filename, type) {
+  const blob = new Blob([content], { type: `${type};charset=utf-8` });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+
+  link.href = url;
+  link.download = filename;
+  document.body.append(link);
+  link.click();
+  link.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function dateStamp() {
+  return new Date().toISOString().slice(0, 10);
 }
 
 function getSelectedShoppingIds() {
