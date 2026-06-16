@@ -273,6 +273,7 @@
               <span>Google Places search</span>
               <input id="shoppingPlaceSearch" type="search" placeholder="Search shops, makers, markets, boutiques...">
             </label>
+            <p class="key-health" id="shoppingKeyHealth">Places key: checking this browser.</p>
             <div class="actions compact-actions">
               <button type="button" id="shoppingRunSearch">Search places</button>
               <button type="button" class="secondary" id="shoppingAddBlank">Blank draft</button>
@@ -285,10 +286,14 @@
           </div>
 
           <div class="pilot-note-box">
-            <h3>Isolated pilot</h3>
+            <h3>Output</h3>
+            <div class="output-actions">
+              <button type="button" class="secondary" id="shoppingTopExportCsv">Export CSV</button>
+              <button type="button" class="secondary" id="shoppingTopExportJson">Export JSON</button>
+            </div>
             <p>
-              This table does not update the live Shopping page, Google Sheet workflow, TMS, or CIF/GIF data.
-              Publish means approved inside the pilot only.
+              Imported records appear in the table below and can be exported from here. This pilot still does not
+              update the live Shopping page, Google Sheet workflow, TMS, or CIF/GIF data.
             </p>
           </div>
         </div>

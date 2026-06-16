@@ -1,4 +1,4 @@
-const appVersion = "2.1.0";
+const appVersion = "2.2.0";
 const storageKey = "capture-app-prototype-items";
 const shoppingStorageKey = "capture-app-shopping-pilot-records";
 const placesKeyStorageKey = "capture-app-google-places-key";
@@ -37,6 +37,7 @@ const shoppingRunSearchButton = document.querySelector("#shoppingRunSearch");
 const shoppingAddBlankButton = document.querySelector("#shoppingAddBlank");
 const shoppingClearSearchButton = document.querySelector("#shoppingClearSearch");
 const shoppingPlacesStatus = document.querySelector("#shoppingPlacesStatus");
+const shoppingKeyHealth = document.querySelector("#shoppingKeyHealth");
 const shoppingPlaceResults = document.querySelector("#shoppingPlaceResults");
 const shoppingTableSearch = document.querySelector("#shoppingTableSearch");
 const shoppingStatusFilter = document.querySelector("#shoppingStatusFilter");
@@ -44,6 +45,8 @@ const shoppingBulkStatus = document.querySelector("#shoppingBulkStatus");
 const shoppingBulkVisibility = document.querySelector("#shoppingBulkVisibility");
 const shoppingBulkCategory = document.querySelector("#shoppingBulkCategory");
 const shoppingApplyBulkButton = document.querySelector("#shoppingApplyBulk");
+const shoppingTopExportCsvButton = document.querySelector("#shoppingTopExportCsv");
+const shoppingTopExportJsonButton = document.querySelector("#shoppingTopExportJson");
 const shoppingExportCsvButton = document.querySelector("#shoppingExportCsv");
 const shoppingExportJsonButton = document.querySelector("#shoppingExportJson");
 const shoppingDeleteSelectedButton = document.querySelector("#shoppingDeleteSelected");
@@ -93,6 +96,7 @@ placesApiKeyInput.value = localStorage.getItem(placesKeyStorageKey) || "";
 if (placesApiKeyInput.value) {
   placesStatus.textContent = "Places key saved on this device. Tap Enable lookup to use autocomplete.";
 }
+updatePlacesKeyHealth();
 
 form.addEventListener("submit", (event) => {
   event.preventDefault();
@@ -177,13 +181,13 @@ savePlacesKeyButton.addEventListener("click", () => {
   }
 
   localStorage.setItem(placesKeyStorageKey, key);
+  updatePlacesKeyHealth();
   placesStatus.textContent = "Places key saved on this device. Tap Enable lookup.";
   flashSaved("Key saved");
 });
 
 clearPlacesKeyButton.addEventListener("click", () => {
-  localStorage.removeItem(placesKeyStorageKey);
-  placesApiKeyInput.value = "";
+  clearSavedPlacesKey();
   placeSearchWrap.hidden = true;
   runPlaceSearchButton.hidden = true;
   placeResults.hidden = true;
@@ -192,6 +196,7 @@ clearPlacesKeyButton.addEventListener("click", () => {
   placesSessionToken = null;
   placesLookupReady = false;
   placesStatus.textContent = "Places key cleared from this device.";
+  shoppingPlacesStatus.textContent = "Places key cleared. Paste the current Google Places browser key before searching.";
   flashSaved("Key cleared");
 });
 
@@ -204,6 +209,7 @@ enablePlacesLookupButton.addEventListener("click", async () => {
   }
 
   localStorage.setItem(placesKeyStorageKey, key);
+  updatePlacesKeyHealth();
   placesStatus.textContent = "Loading Google Places...";
 
   try {
@@ -305,6 +311,8 @@ shoppingTableBody.addEventListener("change", (event) => {
 
 shoppingTableBody.addEventListener("click", handleShoppingTableAction);
 shoppingApplyBulkButton.addEventListener("click", applyShoppingBulkEdit);
+shoppingTopExportCsvButton.addEventListener("click", exportShoppingCsv);
+shoppingTopExportJsonButton.addEventListener("click", exportShoppingJson);
 shoppingExportCsvButton.addEventListener("click", exportShoppingCsv);
 shoppingExportJsonButton.addEventListener("click", exportShoppingJson);
 shoppingDeleteSelectedButton.addEventListener("click", deleteSelectedShoppingRecords);
@@ -402,6 +410,56 @@ function persist() {
 
 function persistShoppingRecords() {
   localStorage.setItem(shoppingStorageKey, JSON.stringify(shoppingRecords));
+}
+
+function clearSavedPlacesKey() {
+  localStorage.removeItem(placesKeyStorageKey);
+  placesApiKeyInput.value = "";
+  updatePlacesKeyHealth();
+}
+
+function updatePlacesKeyHealth() {
+  const key = placesApiKeyInput.value.trim() || localStorage.getItem(placesKeyStorageKey) || "";
+  const health = describePlacesKey(key);
+
+  shoppingKeyHealth.textContent = health.message;
+  shoppingKeyHealth.classList.toggle("is-warning", health.level === "warning");
+  shoppingKeyHealth.classList.toggle("is-ok", health.level === "ok");
+}
+
+function describePlacesKey(key) {
+  if (!key) {
+    return {
+      level: "warning",
+      message: "Places key: none saved in this browser.",
+    };
+  }
+
+  if (/^\d{10,}/.test(key) || key.includes(".apps.googleusercontent.com")) {
+    return {
+      level: "warning",
+      message: "Places key: this looks like an OAuth client id, not a Google Maps API key.",
+    };
+  }
+
+  if (key.length < 35) {
+    return {
+      level: "warning",
+      message: `Places key: saved key is only ${key.length} characters, so it is probably incomplete.`,
+    };
+  }
+
+  if (!key.startsWith("AIza")) {
+    return {
+      level: "warning",
+      message: "Places key: saved value does not look like a Google Maps browser API key.",
+    };
+  }
+
+  return {
+    level: "ok",
+    message: `Places key: saved in this browser (${key.length} characters).`,
+  };
 }
 
 function render() {
@@ -1086,7 +1144,10 @@ async function fetchShoppingPlaceSuggestions() {
     shoppingPlaceSuggestions = suggestions || [];
     renderShoppingPlaceSuggestions(shoppingPlaceSuggestions, input);
   } catch (error) {
-    shoppingPlacesStatus.textContent = `Shopping search failed: ${readErrorMessage(error)}`;
+    const message = readErrorMessage(error);
+    shoppingPlacesStatus.textContent = isInvalidApiKeyError(message)
+      ? "Shopping search failed: Google rejected this API key. Clear it and paste the current Luxe Capture Places browser key from Google Cloud Credentials."
+      : `Shopping search failed: ${message}`;
   }
 }
 
@@ -1219,6 +1280,7 @@ function buildShoppingRecordFromGooglePlace(place) {
 
 async function ensureGooglePlacesReady(statusElement = placesStatus) {
   const key = placesApiKeyInput.value.trim() || localStorage.getItem(placesKeyStorageKey) || "";
+  const health = describePlacesKey(key);
 
   if (!key) {
     statusElement.textContent = "Paste and save the restricted Google Places key first.";
@@ -1226,7 +1288,15 @@ async function ensureGooglePlacesReady(statusElement = placesStatus) {
     return false;
   }
 
+  if (health.level === "warning") {
+    statusElement.textContent = `${health.message} Clear it, then paste the full key from Google Cloud Credentials.`;
+    placesApiKeyInput.focus();
+    updatePlacesKeyHealth();
+    return false;
+  }
+
   localStorage.setItem(placesKeyStorageKey, key);
+  updatePlacesKeyHealth();
 
   try {
     await loadGoogleMapsScript(key);
@@ -1543,7 +1613,9 @@ function readErrorMessage(error) {
 
 function showPlacesError(prefix, error) {
   const message = readErrorMessage(error);
-  placesStatus.textContent = `${prefix}: ${message}`;
+  placesStatus.textContent = isInvalidApiKeyError(message)
+    ? `${prefix}: Google rejected this API key. Clear it and paste the current Luxe Capture Places browser key from Google Cloud Credentials.`
+    : `${prefix}: ${message}`;
   placesDebug.hidden = false;
   placesDebug.textContent = [
     `Page: ${window.location.href}`,
@@ -1553,6 +1625,10 @@ function showPlacesError(prefix, error) {
     `Error code: ${error?.code || error?.status || "(none)"}`,
     `Error message: ${message}`,
   ].join("\n");
+}
+
+function isInvalidApiKeyError(message) {
+  return /api key not valid|please pass a valid api key/i.test(String(message || ""));
 }
 
 async function refreshAppShell() {

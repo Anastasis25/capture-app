@@ -494,6 +494,40 @@ button.danger {
   line-height: 1.45;
 }
 
+.key-health {
+  margin: 0;
+  padding: 9px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: #334155;
+  background: #fff;
+  font-size: 0.84rem;
+  font-weight: 750;
+}
+
+.key-health.is-warning {
+  border-color: #f3c77b;
+  color: #7c4a03;
+  background: #fff7e6;
+}
+
+.key-health.is-ok {
+  border-color: #86d7c9;
+  color: #0f5f57;
+  background: #e6f8f5;
+}
+
+.output-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.output-actions button {
+  padding: 9px 11px;
+}
+
 .compact-actions {
   align-items: center;
 }
