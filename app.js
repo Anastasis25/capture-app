@@ -1,5 +1,6 @@
-const appVersion = "1.3.0";
+const appVersion = "2.0.0";
 const storageKey = "capture-app-prototype-items";
+const shoppingStorageKey = "capture-app-shopping-pilot-records";
 const placesKeyStorageKey = "capture-app-google-places-key";
 
 const form = document.querySelector("#captureForm");
@@ -31,6 +32,24 @@ const runPlaceSearchButton = document.querySelector("#runPlaceSearch");
 const placeResults = document.querySelector("#placeResults");
 const placesStatus = document.querySelector("#placesStatus");
 const placesDebug = document.querySelector("#placesDebug");
+const shoppingPlaceSearchInput = document.querySelector("#shoppingPlaceSearch");
+const shoppingRunSearchButton = document.querySelector("#shoppingRunSearch");
+const shoppingAddBlankButton = document.querySelector("#shoppingAddBlank");
+const shoppingClearSearchButton = document.querySelector("#shoppingClearSearch");
+const shoppingPlacesStatus = document.querySelector("#shoppingPlacesStatus");
+const shoppingPlaceResults = document.querySelector("#shoppingPlaceResults");
+const shoppingTableSearch = document.querySelector("#shoppingTableSearch");
+const shoppingStatusFilter = document.querySelector("#shoppingStatusFilter");
+const shoppingBulkStatus = document.querySelector("#shoppingBulkStatus");
+const shoppingBulkVisibility = document.querySelector("#shoppingBulkVisibility");
+const shoppingBulkCategory = document.querySelector("#shoppingBulkCategory");
+const shoppingApplyBulkButton = document.querySelector("#shoppingApplyBulk");
+const shoppingDeleteSelectedButton = document.querySelector("#shoppingDeleteSelected");
+const shoppingSelectedCount = document.querySelector("#shoppingSelectedCount");
+const shoppingSelectAll = document.querySelector("#shoppingSelectAll");
+const shoppingPilotCount = document.querySelector("#shoppingPilotCount");
+const shoppingTableBody = document.querySelector("#shoppingTableBody");
+const shoppingEmptyState = document.querySelector("#shoppingEmptyState");
 const fields = {
   title: document.querySelector("#title"),
   notes: document.querySelector("#notes"),
@@ -55,6 +74,7 @@ const fields = {
 };
 
 let captures = loadCaptures();
+let shoppingRecords = loadShoppingRecords();
 let editingId = null;
 let currentPhotoData = "";
 let placesLibrary = null;
@@ -62,7 +82,9 @@ let placesSessionToken = null;
 let googleMapsScriptPromise = null;
 let placesLookupReady = false;
 let latestPlacesRequestId = 0;
+let latestShoppingPlacesRequestId = 0;
 let placeSearchDebounce = null;
+let shoppingPlaceSuggestions = [];
 
 appVersionLabel.textContent = `v${appVersion}`;
 placesApiKeyInput.value = localStorage.getItem(placesKeyStorageKey) || "";
@@ -223,6 +245,66 @@ placeResults.addEventListener("click", (event) => {
   fillFromGooglePlacePrediction(prediction);
 });
 
+shoppingRunSearchButton.addEventListener("click", fetchShoppingPlaceSuggestions);
+shoppingAddBlankButton.addEventListener("click", addBlankShoppingDraft);
+
+shoppingPlaceSearchInput.addEventListener("keydown", (event) => {
+  if (event.key === "Enter") {
+    event.preventDefault();
+    fetchShoppingPlaceSuggestions();
+  }
+});
+
+shoppingClearSearchButton.addEventListener("click", () => {
+  shoppingPlaceSearchInput.value = "";
+  shoppingPlaceSuggestions = [];
+  shoppingPlaceResults.replaceChildren();
+  shoppingPlaceResults.hidden = true;
+  shoppingPlacesStatus.textContent =
+    "Search cleared. Imported Shopping Pilot records remain in the table.";
+});
+
+shoppingPlaceResults.addEventListener("click", (event) => {
+  const button = event.target.closest("button[data-shopping-index]");
+  if (!button) {
+    return;
+  }
+
+  const suggestion = shoppingPlaceSuggestions[Number(button.dataset.shoppingIndex)];
+  const prediction = suggestion?.placePrediction;
+  if (!prediction) {
+    return;
+  }
+
+  importShoppingPlacePrediction(prediction);
+});
+
+shoppingTableSearch.addEventListener("input", renderShoppingPilot);
+shoppingStatusFilter.addEventListener("change", renderShoppingPilot);
+
+shoppingSelectAll.addEventListener("change", () => {
+  shoppingTableBody
+    .querySelectorAll('input[data-shopping-select="row"]')
+    .forEach((checkbox) => {
+      checkbox.checked = shoppingSelectAll.checked;
+    });
+  updateShoppingSelectedCount();
+});
+
+shoppingTableBody.addEventListener("input", handleShoppingInlineEdit);
+shoppingTableBody.addEventListener("change", (event) => {
+  if (event.target.matches('input[data-shopping-select="row"]')) {
+    updateShoppingSelectedCount();
+    return;
+  }
+
+  handleShoppingInlineEdit(event);
+});
+
+shoppingTableBody.addEventListener("click", handleShoppingTableAction);
+shoppingApplyBulkButton.addEventListener("click", applyShoppingBulkEdit);
+shoppingDeleteSelectedButton.addEventListener("click", deleteSelectedShoppingRecords);
+
 choosePhotoButton.addEventListener("click", () => photoInput.click());
 takePhotoButton.addEventListener("click", () => cameraPhotoInput.click());
 
@@ -291,6 +373,7 @@ captureList.addEventListener("click", (event) => {
 });
 
 render();
+renderShoppingPilot();
 registerServiceWorker();
 
 function loadCaptures() {
@@ -301,8 +384,20 @@ function loadCaptures() {
   }
 }
 
+function loadShoppingRecords() {
+  try {
+    return JSON.parse(localStorage.getItem(shoppingStorageKey)) || [];
+  } catch {
+    return [];
+  }
+}
+
 function persist() {
   localStorage.setItem(storageKey, JSON.stringify(captures));
+}
+
+function persistShoppingRecords() {
+  localStorage.setItem(shoppingStorageKey, JSON.stringify(shoppingRecords));
 }
 
 function render() {
@@ -394,6 +489,346 @@ function render() {
 
     captureList.append(node);
   });
+}
+
+function renderShoppingPilot() {
+  const visible = getVisibleShoppingRecords();
+
+  shoppingTableBody.replaceChildren();
+  shoppingPilotCount.textContent = `${shoppingRecords.length} ${
+    shoppingRecords.length === 1 ? "record" : "records"
+  }`;
+  shoppingEmptyState.hidden = visible.length > 0;
+
+  visible.forEach((record) => {
+    shoppingTableBody.append(createShoppingRow(record));
+  });
+
+  shoppingSelectAll.checked = false;
+  shoppingSelectAll.indeterminate = false;
+  updateShoppingSelectedCount();
+}
+
+function addBlankShoppingDraft() {
+  const now = new Date().toISOString();
+  const record = {
+    id: crypto.randomUUID(),
+    name: "New shopping place",
+    category: "Other",
+    subcategory: "",
+    status: "draft",
+    visibility: "private",
+    destination: "",
+    region: "",
+    country: "",
+    address: "",
+    phone: "",
+    website: "",
+    googleMapsUrl: "",
+    googlePlaceId: "",
+    latitude: "",
+    longitude: "",
+    rating: "",
+    userRatingCount: "",
+    priceLevel: "",
+    businessStatus: "",
+    googleTypes: [],
+    internalNotes: "",
+    publicNotes: "",
+    source: "manual",
+    importedAt: "",
+    createdAt: now,
+    updatedAt: now,
+  };
+
+  shoppingRecords = [record, ...shoppingRecords];
+  persistShoppingRecords();
+  renderShoppingPilot();
+  flashSaved("Shopping draft added");
+}
+
+function getVisibleShoppingRecords() {
+  const query = shoppingTableSearch.value.trim().toLowerCase();
+  const status = shoppingStatusFilter.value;
+
+  return shoppingRecords.filter((record) => {
+    const haystack = [
+      record.name,
+      record.category,
+      record.subcategory,
+      record.status,
+      record.visibility,
+      record.destination,
+      record.region,
+      record.country,
+      record.address,
+      record.phone,
+      record.website,
+      record.googleMapsUrl,
+      record.internalNotes,
+      record.publicNotes,
+      record.googlePlaceId,
+      ...(record.googleTypes || []),
+    ]
+      .join(" ")
+      .toLowerCase();
+
+    return (!query || haystack.includes(query)) && (status === "all" || record.status === status);
+  });
+}
+
+function createShoppingRow(record) {
+  const row = document.createElement("tr");
+  row.dataset.id = record.id;
+  row.className = `status-${escapeHtml(record.status || "draft")}`;
+
+  row.innerHTML = `
+    <td>
+      <input type="checkbox" data-shopping-select="row" aria-label="Select ${escapeHtml(record.name)}">
+    </td>
+    <td>
+      <input class="table-name-input" data-shopping-field="name" value="${escapeHtml(record.name)}">
+    </td>
+    <td>
+      <select data-shopping-field="category">
+        ${shoppingCategoryOptions(record.category)}
+      </select>
+      <input data-shopping-field="subcategory" value="${escapeHtml(record.subcategory)}" placeholder="Subcategory">
+    </td>
+    <td>
+      <select data-shopping-field="status">
+        ${shoppingStatusOptions(record.status)}
+      </select>
+    </td>
+    <td>
+      <select data-shopping-field="visibility">
+        ${shoppingVisibilityOptions(record.visibility)}
+      </select>
+    </td>
+    <td>
+      <input data-shopping-field="destination" value="${escapeHtml(record.destination)}" placeholder="Town / area">
+      <input data-shopping-field="region" value="${escapeHtml(record.region)}" placeholder="Region / island">
+      <input data-shopping-field="country" value="${escapeHtml(record.country)}" placeholder="Country">
+    </td>
+    <td>
+      <textarea class="table-address-input" data-shopping-field="address" placeholder="Address">${escapeHtml(record.address)}</textarea>
+    </td>
+    <td>
+      <div class="table-contact-stack">
+        <input data-shopping-field="phone" value="${escapeHtml(record.phone)}" placeholder="Phone">
+        <input data-shopping-field="website" value="${escapeHtml(record.website)}" placeholder="Website">
+      </div>
+    </td>
+    <td>
+      <div class="table-google-stack">
+        ${record.googleMapsUrl ? `<a href="${escapeHtml(record.googleMapsUrl)}" target="_blank" rel="noopener">Open map</a>` : ""}
+        ${record.googlePlaceId ? `<code title="${escapeHtml(record.googlePlaceId)}">${escapeHtml(record.googlePlaceId)}</code>` : ""}
+        <span>${escapeHtml(formatCoordinatePair(record))}</span>
+        <span>${escapeHtml(formatRating(record))}</span>
+      </div>
+    </td>
+    <td>
+      <textarea class="table-notes-input" data-shopping-field="internalNotes" placeholder="Internal / review notes">${escapeHtml(record.internalNotes)}</textarea>
+      <textarea class="table-notes-input" data-shopping-field="publicNotes" placeholder="Public note / listing copy">${escapeHtml(record.publicNotes)}</textarea>
+    </td>
+    <td>
+      <div class="table-action-stack">
+        <button type="button" class="secondary" data-shopping-action="review">Review</button>
+        <button type="button" class="secondary" data-shopping-action="approve">Approve</button>
+        <button type="button" data-shopping-action="publish">Publish</button>
+        <button type="button" class="danger" data-shopping-action="delete">Delete</button>
+      </div>
+    </td>
+  `;
+
+  return row;
+}
+
+function shoppingCategoryOptions(selected) {
+  return selectOptions(
+    ["Boutique", "Jewellery", "Homeware", "Market", "Artisan", "Food shop", "Other"],
+    selected || "Other"
+  );
+}
+
+function shoppingStatusOptions(selected) {
+  return selectOptions(["draft", "review", "approved", "published", "archived"], selected || "draft");
+}
+
+function shoppingVisibilityOptions(selected) {
+  return selectOptions(["private", "staff", "client", "public"], selected || "private");
+}
+
+function selectOptions(options, selected) {
+  return options
+    .map((option) => {
+      const value = typeof option === "string" ? option : option.value;
+      const label = typeof option === "string" ? titleCase(option) : option.label;
+      const isSelected = value === selected ? " selected" : "";
+      return `<option value="${escapeHtml(value)}"${isSelected}>${escapeHtml(label)}</option>`;
+    })
+    .join("");
+}
+
+function handleShoppingInlineEdit(event) {
+  const control = event.target.closest("[data-shopping-field]");
+  if (!control) {
+    return;
+  }
+
+  const row = control.closest("tr[data-id]");
+  const record = findShoppingRecord(row?.dataset.id);
+  const field = control.dataset.shoppingField;
+
+  if (!record || !field) {
+    return;
+  }
+
+  record[field] = control.value;
+  record.updatedAt = new Date().toISOString();
+
+  if (field === "status") {
+    row.className = `status-${record.status || "draft"}`;
+  }
+
+  persistShoppingRecords();
+
+  if (event.type === "change") {
+    flashSaved("Shopping saved");
+
+    if (field === "status" && shoppingStatusFilter.value !== "all") {
+      renderShoppingPilot();
+    }
+  }
+}
+
+function handleShoppingTableAction(event) {
+  const button = event.target.closest("button[data-shopping-action]");
+  if (!button) {
+    return;
+  }
+
+  const row = button.closest("tr[data-id]");
+  const record = findShoppingRecord(row?.dataset.id);
+
+  if (!record) {
+    return;
+  }
+
+  const now = new Date().toISOString();
+  const action = button.dataset.shoppingAction;
+
+  if (action === "delete") {
+    if (!window.confirm(`Delete "${record.name}" from the Shopping Pilot?`)) {
+      return;
+    }
+
+    shoppingRecords = shoppingRecords.filter((item) => item.id !== record.id);
+    persistShoppingRecords();
+    renderShoppingPilot();
+    flashSaved("Shopping deleted");
+    return;
+  }
+
+  if (action === "review") {
+    record.status = "review";
+    record.reviewedAt = now;
+  }
+
+  if (action === "approve") {
+    record.status = "approved";
+    record.approvedAt = now;
+  }
+
+  if (action === "publish") {
+    record.status = "published";
+    record.publishedAt = now;
+    if (record.visibility === "private") {
+      record.visibility = "public";
+    }
+  }
+
+  record.updatedAt = now;
+  persistShoppingRecords();
+  renderShoppingPilot();
+  flashSaved(`Shopping ${record.status}`);
+}
+
+function applyShoppingBulkEdit() {
+  const ids = getSelectedShoppingIds();
+
+  if (!ids.length) {
+    flashSaved("Select rows first");
+    return;
+  }
+
+  const status = shoppingBulkStatus.value;
+  const visibility = shoppingBulkVisibility.value;
+  const category = shoppingBulkCategory.value;
+
+  if (!status && !visibility && !category) {
+    flashSaved("Choose a bulk edit");
+    return;
+  }
+
+  const now = new Date().toISOString();
+  shoppingRecords = shoppingRecords.map((record) => {
+    if (!ids.includes(record.id)) {
+      return record;
+    }
+
+    return {
+      ...record,
+      status: status || record.status,
+      visibility: visibility || record.visibility,
+      category: category || record.category,
+      updatedAt: now,
+    };
+  });
+
+  shoppingBulkStatus.value = "";
+  shoppingBulkVisibility.value = "";
+  shoppingBulkCategory.value = "";
+  persistShoppingRecords();
+  renderShoppingPilot();
+  flashSaved("Bulk edit applied");
+}
+
+function deleteSelectedShoppingRecords() {
+  const ids = getSelectedShoppingIds();
+
+  if (!ids.length) {
+    flashSaved("Select rows first");
+    return;
+  }
+
+  if (!window.confirm(`Delete ${ids.length} selected Shopping Pilot record(s)?`)) {
+    return;
+  }
+
+  shoppingRecords = shoppingRecords.filter((record) => !ids.includes(record.id));
+  persistShoppingRecords();
+  renderShoppingPilot();
+  flashSaved("Selected deleted");
+}
+
+function getSelectedShoppingIds() {
+  return Array.from(shoppingTableBody.querySelectorAll('input[data-shopping-select="row"]:checked'))
+    .map((checkbox) => checkbox.closest("tr[data-id]")?.dataset.id)
+    .filter(Boolean);
+}
+
+function updateShoppingSelectedCount() {
+  const selected = getSelectedShoppingIds();
+  const visibleRows = shoppingTableBody.querySelectorAll("tr[data-id]").length;
+
+  shoppingSelectedCount.textContent = `${selected.length} selected`;
+  shoppingSelectAll.indeterminate = selected.length > 0 && selected.length < visibleRows;
+  shoppingSelectAll.checked = visibleRows > 0 && selected.length === visibleRows;
+}
+
+function findShoppingRecord(id) {
+  return shoppingRecords.find((record) => record.id === id);
 }
 
 function editCapture(capture) {
@@ -523,6 +958,213 @@ function buildMapsQuery() {
     .join(" ");
 }
 
+async function fetchShoppingPlaceSuggestions() {
+  const input = shoppingPlaceSearchInput.value.trim();
+
+  shoppingPlaceResults.replaceChildren();
+  shoppingPlaceResults.hidden = true;
+
+  if (input.length < 3) {
+    shoppingPlacesStatus.textContent = "Type at least 3 characters to search Google Places.";
+    return;
+  }
+
+  if (!(await ensureGooglePlacesReady(shoppingPlacesStatus))) {
+    return;
+  }
+
+  const requestId = ++latestShoppingPlacesRequestId;
+  shoppingPlacesStatus.textContent = `Searching Google Places for "${input}"...`;
+
+  try {
+    const { suggestions } =
+      await placesLibrary.AutocompleteSuggestion.fetchAutocompleteSuggestions({
+        input,
+        language: "en-GB",
+        sessionToken: placesSessionToken,
+      });
+
+    if (requestId !== latestShoppingPlacesRequestId) {
+      return;
+    }
+
+    shoppingPlaceSuggestions = suggestions || [];
+    renderShoppingPlaceSuggestions(shoppingPlaceSuggestions, input);
+  } catch (error) {
+    shoppingPlacesStatus.textContent = `Shopping search failed: ${readErrorMessage(error)}`;
+  }
+}
+
+function renderShoppingPlaceSuggestions(suggestions, input) {
+  shoppingPlaceResults.replaceChildren();
+
+  if (!suggestions.length) {
+    shoppingPlacesStatus.textContent = `No Shopping place suggestions found for "${input}".`;
+    shoppingPlaceResults.hidden = true;
+    return;
+  }
+
+  suggestions.forEach((suggestion, index) => {
+    const prediction = suggestion.placePrediction;
+    if (!prediction) {
+      return;
+    }
+
+    const item = document.createElement("li");
+    const detail = document.createElement("div");
+    const title = document.createElement("span");
+    const subtitle = document.createElement("span");
+    const button = document.createElement("button");
+
+    title.className = "place-result-title";
+    title.textContent = prediction.text.toString();
+    subtitle.className = "place-result-detail";
+    subtitle.textContent = prediction.placeId || "Google Places result";
+    button.type = "button";
+    button.dataset.shoppingIndex = String(index);
+    button.textContent = "Import";
+
+    detail.append(title, subtitle);
+    item.append(detail, button);
+    shoppingPlaceResults.append(item);
+  });
+
+  shoppingPlaceResults.hidden = shoppingPlaceResults.children.length === 0;
+  shoppingPlacesStatus.textContent = "Import a result to create a Shopping Pilot draft.";
+}
+
+async function importShoppingPlacePrediction(placePrediction) {
+  shoppingPlacesStatus.textContent = "Importing Google place into Shopping Pilot...";
+
+  try {
+    const place = await fetchGooglePlaceDetails(placePrediction, [
+      "rating",
+      "userRatingCount",
+      "priceLevel",
+      "businessStatus",
+    ]);
+    const record = buildShoppingRecordFromGooglePlace(place);
+    const existing = shoppingRecords.find((item) => item.googlePlaceId === record.googlePlaceId);
+
+    if (existing) {
+      Object.assign(existing, {
+        ...record,
+        id: existing.id,
+        status: existing.status || "draft",
+        visibility: existing.visibility || "private",
+        internalNotes: existing.internalNotes || record.internalNotes,
+        publicNotes: existing.publicNotes || record.publicNotes,
+        createdAt: existing.createdAt || record.createdAt,
+        updatedAt: new Date().toISOString(),
+      });
+      shoppingPlacesStatus.textContent = `"${existing.name}" already existed, so its Google data was refreshed.`;
+    } else {
+      shoppingRecords = [record, ...shoppingRecords];
+      shoppingPlacesStatus.textContent = `"${record.name}" imported as a draft.`;
+    }
+
+    placesSessionToken = new placesLibrary.AutocompleteSessionToken();
+    shoppingPlaceSuggestions = [];
+    shoppingPlaceResults.replaceChildren();
+    shoppingPlaceResults.hidden = true;
+    shoppingPlaceSearchInput.value = "";
+    persistShoppingRecords();
+    renderShoppingPilot();
+    flashSaved("Shopping imported");
+  } catch (error) {
+    shoppingPlacesStatus.textContent = `Import failed: ${readErrorMessage(error)}`;
+  }
+}
+
+function buildShoppingRecordFromGooglePlace(place) {
+  const components = place.addressComponents || [];
+  const now = new Date().toISOString();
+  const location = place.location || {};
+  const destination =
+    addressPart(components, "locality") ||
+    addressPart(components, "postal_town") ||
+    addressPart(components, "administrative_area_level_3") ||
+    addressPart(components, "sublocality") ||
+    "";
+  const region =
+    addressPart(components, "administrative_area_level_2") ||
+    addressPart(components, "administrative_area_level_1") ||
+    "";
+
+  return {
+    id: crypto.randomUUID(),
+    name: readPlaceName(place) || "Untitled shopping place",
+    category: inferShoppingCategory(place.types || []),
+    subcategory: formatGoogleTypes(place.types || []),
+    status: "draft",
+    visibility: "private",
+    destination,
+    region,
+    country: addressPart(components, "country") || "",
+    address: place.formattedAddress || "",
+    phone: stringifyPlaceValue(place.internationalPhoneNumber),
+    website: stringifyPlaceValue(place.websiteURI),
+    googleMapsUrl: stringifyPlaceValue(place.googleMapsURI),
+    googlePlaceId: place.id || "",
+    latitude: readCoordinate(location, "lat"),
+    longitude: readCoordinate(location, "lng"),
+    rating: stringifyPlaceValue(place.rating),
+    userRatingCount: stringifyPlaceValue(place.userRatingCount),
+    priceLevel: stringifyPlaceValue(place.priceLevel),
+    businessStatus: stringifyPlaceValue(place.businessStatus),
+    googleTypes: place.types || [],
+    internalNotes: "",
+    publicNotes: "",
+    source: "google_places",
+    importedAt: now,
+    createdAt: now,
+    updatedAt: now,
+  };
+}
+
+async function ensureGooglePlacesReady(statusElement = placesStatus) {
+  const key = placesApiKeyInput.value.trim() || localStorage.getItem(placesKeyStorageKey) || "";
+
+  if (!key) {
+    statusElement.textContent = "Paste and save the restricted Google Places key first.";
+    placesApiKeyInput.focus();
+    return false;
+  }
+
+  localStorage.setItem(placesKeyStorageKey, key);
+
+  try {
+    await loadGoogleMapsScript(key);
+    await initialisePlacesAutocomplete();
+    return true;
+  } catch (error) {
+    statusElement.textContent = `Could not load Google Places: ${readErrorMessage(error)}`;
+    return false;
+  }
+}
+
+async function fetchGooglePlaceDetails(placePrediction, extraFields = []) {
+  const place = placePrediction.toPlace();
+  const fieldsToFetch = [
+    "id",
+    "displayName",
+    "formattedAddress",
+    "addressComponents",
+    "internationalPhoneNumber",
+    "websiteURI",
+    "googleMapsURI",
+    "location",
+    "types",
+    ...extraFields,
+  ];
+
+  await place.fetchFields({
+    fields: Array.from(new Set(fieldsToFetch)),
+  });
+
+  return place;
+}
+
 function loadGoogleMapsScript(key) {
   if (window.google?.maps?.importLibrary) {
     return Promise.resolve();
@@ -632,21 +1274,7 @@ async function fillFromGooglePlacePrediction(placePrediction) {
   placesStatus.textContent = "Loading place details...";
 
   try {
-    const place = placePrediction.toPlace();
-    await place.fetchFields({
-      fields: [
-        "id",
-        "displayName",
-        "formattedAddress",
-        "addressComponents",
-        "internationalPhoneNumber",
-        "websiteURI",
-        "googleMapsURI",
-        "location",
-        "types",
-      ],
-    });
-
+    const place = await fetchGooglePlaceDetails(placePrediction);
     fillFromGooglePlace(place);
     placesSessionToken = new placesLibrary.AutocompleteSessionToken();
     placesLibrary.lastSuggestions = [];
@@ -707,6 +1335,103 @@ function readPlaceName(place) {
   }
 
   return place.displayName?.text || "";
+}
+
+function inferShoppingCategory(types) {
+  const typeSet = new Set(types || []);
+
+  if (typeSet.has("jewelry_store")) {
+    return "Jewellery";
+  }
+
+  if (typeSet.has("home_goods_store") || typeSet.has("furniture_store")) {
+    return "Homeware";
+  }
+
+  if (typeSet.has("clothing_store") || typeSet.has("shoe_store")) {
+    return "Boutique";
+  }
+
+  if (typeSet.has("market") || typeSet.has("supermarket") || typeSet.has("grocery_store")) {
+    return "Market";
+  }
+
+  if (typeSet.has("bakery") || typeSet.has("food_store") || typeSet.has("liquor_store")) {
+    return "Food shop";
+  }
+
+  if (typeSet.has("store") || typeSet.has("point_of_interest")) {
+    return "Other";
+  }
+
+  return "Other";
+}
+
+function formatGoogleTypes(types) {
+  return (types || [])
+    .slice(0, 3)
+    .map((type) => titleCase(type))
+    .join(", ");
+}
+
+function stringifyPlaceValue(value) {
+  if (value === undefined || value === null) {
+    return "";
+  }
+
+  if (typeof value === "string") {
+    return value;
+  }
+
+  if (typeof value === "number") {
+    return String(value);
+  }
+
+  if (value.href) {
+    return value.href;
+  }
+
+  return String(value);
+}
+
+function readCoordinate(location, key) {
+  const value = location?.[key];
+
+  if (typeof value === "function") {
+    return String(Number(value.call(location)).toFixed(6));
+  }
+
+  if (typeof value === "number") {
+    return String(Number(value).toFixed(6));
+  }
+
+  return "";
+}
+
+function formatCoordinatePair(record) {
+  if (!record.latitude || !record.longitude) {
+    return "No coordinates";
+  }
+
+  return `${record.latitude}, ${record.longitude}`;
+}
+
+function formatRating(record) {
+  if (!record.rating) {
+    return "No rating";
+  }
+
+  const count = record.userRatingCount ? ` (${record.userRatingCount})` : "";
+  return `Rating ${record.rating}${count}`;
+}
+
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
 }
 
 function readErrorMessage(error) {

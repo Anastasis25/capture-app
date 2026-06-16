@@ -101,6 +101,7 @@
                 <input id="placeSearch" type="search" placeholder="Start typing a restaurant, shop, cafe...">
               </label>
               <button type="button" class="secondary lookup-search-button" id="runPlaceSearch" hidden>Search places</button>
+              <div class="google-place-widget" id="googlePlaceWidget" hidden></div>
               <ul class="place-results" id="placeResults" hidden></ul>
               <p class="helper-text" id="placesStatus">No Places key saved on this device yet.</p>
               <pre class="debug-output" id="placesDebug" hidden></pre>
@@ -255,6 +256,127 @@
         </div>
 
         <div id="captureList" class="capture-list" aria-live="polite"></div>
+      </section>
+
+      <section class="shopping-pilot-panel" aria-labelledby="shopping-pilot-title">
+        <div class="panel-heading">
+          <div>
+            <p class="eyebrow">Shopping Pilot</p>
+            <h2 id="shopping-pilot-title">Shopping workbench</h2>
+          </div>
+          <span class="count-pill" id="shoppingPilotCount">0 records</span>
+        </div>
+
+        <div class="pilot-grid">
+          <div class="pilot-search-box">
+            <label>
+              <span>Google Places search</span>
+              <input id="shoppingPlaceSearch" type="search" placeholder="Search shops, makers, markets, boutiques...">
+            </label>
+            <div class="actions compact-actions">
+              <button type="button" id="shoppingRunSearch">Search places</button>
+              <button type="button" class="secondary" id="shoppingAddBlank">Blank draft</button>
+              <button type="button" class="secondary" id="shoppingClearSearch">Clear</button>
+            </div>
+            <p class="helper-text" id="shoppingPlacesStatus">
+              Uses the same Google Places key saved above. Imported records stay in this isolated pilot table.
+            </p>
+            <ul class="place-results shopping-place-results" id="shoppingPlaceResults" hidden></ul>
+          </div>
+
+          <div class="pilot-note-box">
+            <h3>Isolated pilot</h3>
+            <p>
+              This table does not update the live Shopping page, Google Sheet workflow, TMS, or CIF/GIF data.
+              Publish means approved inside the pilot only.
+            </p>
+          </div>
+        </div>
+
+        <div class="table-toolbar" aria-label="Shopping pilot filters and bulk edits">
+          <label>
+            <span>Search table</span>
+            <input id="shoppingTableSearch" type="search" placeholder="Filter imported shopping records">
+          </label>
+          <label>
+            <span>Status</span>
+            <select id="shoppingStatusFilter">
+              <option value="all">All statuses</option>
+              <option value="draft">Draft</option>
+              <option value="review">Review</option>
+              <option value="approved">Approved</option>
+              <option value="published">Published</option>
+              <option value="archived">Archived</option>
+            </select>
+          </label>
+          <label>
+            <span>Bulk status</span>
+            <select id="shoppingBulkStatus">
+              <option value="">No status change</option>
+              <option value="draft">Draft</option>
+              <option value="review">Review</option>
+              <option value="approved">Approved</option>
+              <option value="published">Published</option>
+              <option value="archived">Archived</option>
+            </select>
+          </label>
+          <label>
+            <span>Bulk visibility</span>
+            <select id="shoppingBulkVisibility">
+              <option value="">No visibility change</option>
+              <option value="private">Private</option>
+              <option value="staff">Staff</option>
+              <option value="client">Client</option>
+              <option value="public">Public</option>
+            </select>
+          </label>
+          <label>
+            <span>Bulk category</span>
+            <select id="shoppingBulkCategory">
+              <option value="">No category change</option>
+              <option value="Boutique">Boutique</option>
+              <option value="Jewellery">Jewellery</option>
+              <option value="Homeware">Homeware</option>
+              <option value="Market">Market</option>
+              <option value="Artisan">Artisan</option>
+              <option value="Food shop">Food shop</option>
+              <option value="Other">Other</option>
+            </select>
+          </label>
+          <div class="bulk-actions">
+            <span id="shoppingSelectedCount">0 selected</span>
+            <button type="button" class="secondary" id="shoppingApplyBulk">Apply bulk edit</button>
+            <button type="button" class="danger" id="shoppingDeleteSelected">Delete selected</button>
+          </div>
+        </div>
+
+        <div class="table-scroll">
+          <table class="pilot-table">
+            <thead>
+              <tr>
+                <th scope="col">
+                  <input id="shoppingSelectAll" type="checkbox" aria-label="Select all visible shopping records">
+                </th>
+                <th scope="col">Name</th>
+                <th scope="col">Category</th>
+                <th scope="col">Status</th>
+                <th scope="col">Visibility</th>
+                <th scope="col">Destination</th>
+                <th scope="col">Address</th>
+                <th scope="col">Contact</th>
+                <th scope="col">Google</th>
+                <th scope="col">Notes</th>
+                <th scope="col">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="shoppingTableBody"></tbody>
+          </table>
+        </div>
+
+        <div id="shoppingEmptyState" class="empty-state">
+          <h3>No Shopping Pilot records yet</h3>
+          <p>Search Google Places above, import a result, then edit it directly in the table.</p>
+        </div>
       </section>
     </main>
 
